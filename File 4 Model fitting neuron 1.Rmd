@@ -1,6 +1,6 @@
 ---
 title: "Model Fitting Neuron 1 (n200819)"
-author: "Alana"
+author: "814"
 date: "2022/5/25"
 output: pdf_document
 ---
@@ -165,7 +165,7 @@ plothazard=ggplot(HAP_hazard,aes(x=time,y=haz,color=Cell_ID))+
 # Compare with cell data
 ## Read in data
 ```{r}
-home="/Users/chenghui/Documents/synoptic/cell data/"
+home="~/Documents/synoptic/cell data/"
 Cell_ISI=read.csv(paste0(home,"Cell_ISI.csv"))
 Cell_Hazard=read.csv(paste0(home,"Cell_Hazard.csv"))
 Cell_ID=unique(Cell_ISI$Cell_ID)
