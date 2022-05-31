@@ -1,6 +1,6 @@
 ---
 title: "Analyisis of in vivo Spike Timing of Oxytocin Neurons"
-author: "Alana"
+author: "814"
 date: "2022/5/18"
 output: pdf_document
 ---
@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE,cache = TRUE,warning = FALSE, message = FALSE)
 # Read in Data
 The spiking data were provided by Dr. Duncan Macgregor as txt format and read into R.
 ```{r}
-home="/Users/chenghui/Documents/synoptic/cell data/"
+home="~/Documents/synoptic/cell data/"
 data= list()
 cellnum=0
 Cell_ID=c()
