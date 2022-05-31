@@ -1,0 +1,407 @@
+---
+title: "Individual Parameter Fitting"
+author: "Alana"
+date: "2022/5/23"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,cache = TRUE,warning = FALSE, message = FALSE)
+```
+
+# Parameter fitting
+To start the parameter estimation for fitting spiking behaviour of model to oxytocin neurons, we first tried to adjust several key parameters alone and explored their influences on firing rate and ISI distribution.  
+  
+## Fit Ire
+```{r}
+Vrest = -56 # Resting membrane potential
+Vthresh = -50 # Threshold of action potential
+
+# Synaptic input
+eh = 2 # The EPSP magnitude
+ih = -2 # The ISPS magnitude
+lambda_syn = 3.5 # The PSP decay rate
+Ires=c(seq(260,270,2),seq(460,470,2),seq(290,300,2),seq(580,590,2)) # The input rate (Hz)
+Iratio = 1 # The ratio of IPSPs to EPSPs
+
+# Post-spike potential
+kHAP = 30 # Magnitude parameter of hyperpolarising afterpotential (HAP)
+lambda_HAP = 7.5 # Half-life parameter of HAP
+kAHP = 0.2 # Magnitude parameter of after hyperpolarising potential (AHP)
+lambda_AHP = 350 # Half-life parameter of AHP
+
+# Half-life parameter are converted to time strain
+tausyn = log(2) / lambda_syn 
+tauHAP = log(2) / lambda_HAP
+tauAHP = log(2) / lambda_AHP
+Ire_fit=data.frame()
+
+# Simulation time
+runtime = 1000 # simulation time in second
+numsteps = runtime * 1000 # simulation time in ms
+
+for(Ire in Ires){
+  # Initialize values
+  Vsyn = 0 # Synaptic input signal
+  HAP = 0 
+  AHP = 0
+  time = 0
+  hstep = 1 #(the time step in ms) 
+  spikecount = 0
+  tepsp = 0
+  tipsp = 0
+  epsprate = Ire / 1000 
+  ipsprate = epsprate * Iratio
+  spiketime=c()
+  
+  for(i in 1:numsteps) { 
+    # generate EPSPs
+    nepsp = 0
+    while (tepsp < hstep) {
+      rand = runif(1)
+      nepsp = nepsp + 1
+      tepsp = - log(1 - rand)/epsprate+tepsp
+    }
+    tepsp = tepsp - hstep 
+    # generate IPSPs 
+    nipsp = 0
+    while (tipsp < hstep) {
+      rand = runif(1)
+      nipsp = nipsp + 1
+      tipsp = - log(1 - rand) / ipsprate + tipsp
+    }
+    tipsp = tipsp - hstep
+    inputsyn = nepsp * eh + nipsp * ih
+    
+    # membrane variables
+    Vsyn = Vsyn + inputsyn - Vsyn * tausyn 
+    HAP = HAP - HAP * tauHAP
+    AHP = AHP - AHP * tauAHP
+    V = Vrest + Vsyn - HAP - AHP
+    
+    if(V > Vthresh) {
+    spikecount = spikecount + 1
+    spiketime[spikecount] = i
+  
+    # add the post-spike potentials
+    HAP = HAP + kHAP
+    AHP = AHP + kAHP
+    }}
+  spiketime=spiketime/1000 # Convert to (s) scale
+  ds=cbind(rep(Ire,length(spiketime)),spiketime)
+  Ire_fit=rbind(Ire_fit,ds)
+}
+colnames(Ire_fit)[1]='Ire'
+```
+
+### Calculate spiking rate 
+
+```{r}
+spike_rate=c()
+for(Ire in Ires){
+  spiketimedt=Ire_fit[which(Ire_fit$Ire==Ire),]
+  spike_rate=c(spike_rate,length(spiketimedt$Ire)/max(spiketimedt$spiketime))
+}
+library(knitr)
+kable(data.frame(cbind(Ires,spike_rate)))
+```
+  
+The firing rates of four neurons are 3.39, 7.27, 3.99 and 9.24 spike/s.According to the simulation, the approximated input rate Ire for each neuron is 267, 460, 294 and 585.   
+  
+### Calculate  ISI
+```{r}
+Ire_fit_ISI=data.frame()
+for(Ire in Ires){
+  spiketimedt=Ire_fit[which(Ire_fit$Ire==Ire),]
+  ISI=lapply(1:(length(spiketimedt$spiketime)-1),
+             function(i){spiketimedt$spiketime[i+1]-spiketimedt$spiketime[i]})
+  ISI=as.vector(unlist(ISI))
+  ds=cbind(rep(Ire,length(ISI)),ISI)
+  Ire_fit_ISI=rbind(Ire_fit_ISI,ds)
+}
+Ire_fit_ISI=data.frame(Ire_fit_ISI)
+colnames(Ire_fit_ISI)[1]='Ire'
+```
+### Plot ISI
+```{r}
+library(ggplot2)
+library(ggpubr)
+Ire_fit_ISI$Ire=as.factor(Ire_fit_ISI$Ire)
+plot_Ire_fit_ISI=ggplot(Ire_fit_ISI,aes(x=ISI,color=Ire))+
+  geom_density(binwidth = 0.005)+
+  xlim(-0.1,0.5)+ylim(0,12)+
+  xlab('ISI (s)')+ylab('Count')+
+  theme_classic()
+ggplot(Ire_fit_ISI,aes(x=ISI,color=Ire))+
+  geom_histogram(binwidth = 0.005,aes(fill=Ire),alpha=0.5)+
+  xlim(0,0.5)+xlab('ISI (s)')+ylab('Count')+
+  theme_classic()
+ggsave("/Users/chenghui/Documents/synoptic/cell data/Ire_fit_ISI.png",plot_Ire_fit_ISI)
+```
+
+## Fit lambda_HAP
+```{r}
+Vrest = -56 # Resting membrane potential
+Vthresh = -50 # Threshold of action potential
+
+# Synaptic input
+eh = 2 # The EPSP magnitude
+ih = -2 # The ISPS magnitude
+lambda_syn = 3.5 # The PSP decay rate
+Ire=300 # The input rate /s
+Iratio = 1 # The ratio of IPSPs to EPSPs
+
+# Post-spike potential
+kHAP = 30 # Magnitude parameter of hyperpolarising afterpotential (HAP)
+lambda_HAPs = seq(4,12,2) # Half-life parameter of HAP
+kAHP = 0.2 # Magnitude parameter of after hyperpolarising potential (AHP)
+lambda_AHP = 350 # Half-life parameter of AHP
+
+# Half-life parameter are converted to time strain
+tausyn = log(2) / lambda_syn 
+#tauHAP = log(2) / lambda_HAP
+tauAHP = log(2) / lambda_AHP
+
+#run time
+runtime = 1000 # simulation time in second
+numsteps = runtime * 1000 # simulation time in ms
+```
+
+```{r}
+lambda_HAP_fit=data.frame()
+for(lambda_HAP in lambda_HAPs){
+  #print(lambda_HAP)
+  # Initialize values
+  Vsyn = 0 # Synaptic input signal
+  HAP = 0 
+  AHP = 0
+  time = 0
+  hstep = 1 #(the time step in ms) 
+  spikecount = 0
+  tepsp = 0
+  tipsp = 0
+  tauHAP = log(2) / lambda_HAP
+  spiketime=c()
+  
+  for(i in 1:numsteps) { 
+    # generate EPSPs
+    nepsp = 0
+    while (tepsp < hstep) {
+      rand = runif(1)
+      nepsp = nepsp + 1
+      tepsp = - log(1 - rand)/epsprate+tepsp
+    }
+    tepsp = tepsp - hstep 
+    #// generate IPSPs 
+    nipsp = 0
+    while (tipsp < hstep) {
+      rand = runif(1)
+      nipsp = nipsp + 1
+      tipsp = - log(1 - rand) / ipsprate + tipsp
+    }
+    tipsp = tipsp - hstep
+    inputsyn = nepsp * eh + nipsp * ih
+ 
+    # membrane variables
+    Vsyn = Vsyn + inputsyn - Vsyn * tausyn 
+    HAP = HAP - HAP * tauHAP
+    AHP = AHP - AHP * tauAHP
+    V = Vrest + Vsyn - HAP - AHP
+    
+    if(V > Vthresh) {
+    spikecount = spikecount + 1
+    spiketime[spikecount] = i
+  
+    # add the post-spike potentials
+    HAP = HAP + kHAP
+    AHP = AHP + kAHP
+    }}
+  spiketime=spiketime/1000 # Convert to (s) scale
+  ds=cbind(rep(paste0('lambda_HAP_',lambda_HAP),length(spiketime)),spiketime)
+  lambda_HAP_fit=rbind(lambda_HAP_fit,ds)
+}
+colnames(lambda_HAP_fit)[1]='lambda_HAP'
+```
+### Calculate ISI
+```{r}
+lambda_HAP_fit_ISI=data.frame()
+for(lambda_HAP in lambda_HAPs){
+  spiketimedt=lambda_HAP_fit[which(lambda_HAP_fit$lambda_HAP==paste0('lambda_HAP_',lambda_HAP)),]
+  spiketimedt$spiketime=as.numeric(as.character(spiketimedt$spiketime))
+  ISI=c()
+  for (i in 1:(length(spiketimedt$spiketime)-1)){
+    ISI=c(ISI,spiketimedt$spiketime[i+1]-spiketimedt$spiketime[i])
+  }
+  ds=cbind(rep(paste0('lambda_HAP_',lambda_HAP),length(ISI)),ISI)
+  lambda_HAP_fit_ISI=rbind(lambda_HAP_fit_ISI,ds)
+}
+lambda_HAP_fit_ISI=data.frame(lambda_HAP_fit_ISI)
+colnames(lambda_HAP_fit_ISI)[1]='Cell_ID'
+lambda_HAP_fit_ISI$ISI=as.numeric(as.character(lambda_HAP_fit_ISI$ISI))
+```
+### Plot ISI
+```{r}
+lambda_HAP_fit_ISI$Cell_ID=as.factor(lambda_HAP_fit_ISI$Cell_ID)
+plot_lambda_HAP_fit_ISI=ggplot(lambda_HAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
+  geom_histogram(binwidth = 0.005,aes(fill=Cell_ID),alpha=0.5)+
+  xlim(-0,0.5)+theme_classic()+xlab('ISI (s)')+ylab('Count')
+ggplot(lambda_HAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
+  geom_density()+xlim(0,0.5)+theme_classic()+
+  xlab('ISI (s)')+ylab('Count')
+ggsave("/Users/chenghui/Documents/synoptic/cell data/plot_lambda_HAP_fit_ISI.png",
+       plot_lambda_HAP_fit_ISI)
+# Ire_fit_ISI_300=Ire_fit_ISI[which(Ire_fit_ISI$Ire==300),]
+# ggplot(Ire_fit_ISI_300,aes(x=ISI,color=Ire))+
+# geom_density(binwidth = 0.001)+xlim(-0.5,0.5)+ylim(0,1000)+
+# theme_classic()+xlab('ISI (s)')+ylab('Count')
+```
+## Fit kHAP
+### Parameter Initialization
+```{r}
+Vrest = -56 # Resting membrane potential
+Vthresh = -50 # Threshold of action potential
+
+# Synaptic input
+eh = 2 # The EPSP magnitude
+ih = -2 # The ISPS magnitude
+lambda_syn = 3.5 # The PSP decay rate
+Ire=300 # The input rate /s
+Iratio = 1 # The ratio of IPSPs to EPSPs
+epsprate = Ire / 1000 
+ipsprate = epsprate * Iratio
+
+
+# Post-spike potential
+kHAPs = seq(20,100,20) # Magnitude parameter of hyperpolarising afterpotential (HAP)
+lambda_HAP = 7.5 # Half-life parameter of HAP
+kAHP = 0.2 # Magnitude parameter of after hyperpolarising potential (AHP)
+lambda_AHP = 350 # Half-life parameter of AHP
+
+# Half-life parameter are converted to time strain
+tausyn = log(2) / lambda_syn 
+#tauHAP = log(2) / lambda_HAP
+tauAHP = log(2) / lambda_AHP
+
+#run time
+runtime = 1000 # simulation time in second
+numsteps = runtime * 1000 # simulation time in ms
+```
+
+### Model
+```{r}
+kHAP_fit=data.frame()
+for(kHAP in kHAPs){
+  #print(kHAP)
+  # Initialize values
+  Vsyn = 0 # Synaptic input signal
+  HAP = 0 
+  AHP = 0
+  time = 0
+  hstep = 1 #(the time step in ms) 
+  spikecount = 0
+  tepsp = 0
+  tipsp = 0
+  tauHAP = log(2) / lambda_HAP
+  spiketime=c()
+  
+  for(i in 1:numsteps) { 
+    # generate EPSPs
+    nepsp = 0
+    while (tepsp < hstep) {
+      rand = runif(1)
+      nepsp = nepsp + 1
+      tepsp = - log(1 - rand)/epsprate+tepsp
+    }
+    tepsp = tepsp - hstep 
+    #// generate IPSPs 
+    nipsp = 0
+    while (tipsp < hstep) {
+      rand = runif(1)
+      nipsp = nipsp + 1
+      tipsp = - log(1 - rand) / ipsprate + tipsp
+    }
+    tipsp = tipsp - hstep
+    inputsyn = nepsp * eh + nipsp * ih
+ 
+    # membrane variables
+    Vsyn = Vsyn + inputsyn - Vsyn * tausyn 
+    HAP = HAP - HAP * tauHAP
+    AHP = AHP - AHP * tauAHP
+    V = Vrest + Vsyn - HAP - AHP
+    
+    if(V > Vthresh) {
+    spikecount = spikecount + 1
+    spiketime[spikecount] = i
+  
+    # add the post-spike potentials
+    HAP = HAP + kHAP
+    AHP = AHP + kAHP
+    }}
+  spiketime=spiketime/1000 # Convert to (s) scale
+  ds=cbind(rep(paste0('kHAP_',kHAP),length(spiketime)),spiketime)
+  kHAP_fit=rbind(kHAP_fit,ds)
+}
+colnames(kHAP_fit)[1]='kHAP'
+```
+### Calculate ISI
+```{r}
+kHAP_fit_ISI=data.frame()
+for(kHAP in kHAPs){
+  spiketimedt=kHAP_fit[which(kHAP_fit$kHAP==paste0('kHAP_',kHAP)),]
+  spiketimedt$spiketime=as.numeric(as.character(spiketimedt$spiketime))
+  ISI=c()
+  for (i in 1:(length(spiketimedt$spiketime)-1)){
+    ISI=c(ISI,spiketimedt$spiketime[i+1]-spiketimedt$spiketime[i])
+  }
+  ds=cbind(rep(paste0('kHAP_',kHAP),length(ISI)),ISI)
+  kHAP_fit_ISI=rbind(kHAP_fit_ISI,ds)
+}
+kHAP_fit_ISI=data.frame(kHAP_fit_ISI)
+colnames(kHAP_fit_ISI)[1]='Cell_ID'
+kHAP_fit_ISI$ISI=as.numeric(as.character(kHAP_fit_ISI$ISI))
+```
+### Plot ISI
+```{r}
+kHAP_fit_ISI$Cell_ID=as.factor(kHAP_fit_ISI$Cell_ID)
+plot_kHAP_fit_ISI=ggplot(kHAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
+  geom_histogram(binwidth = 0.005,aes(fill=Cell_ID),alpha=0.5)+xlim(0,0.8)+
+  theme_classic()+xlab('ISI (s)')+ylab('Count')
+plot_kHAP_fit_ISI=ggplot(kHAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
+  geom_density(binwidth = 0.005)+xlim(0,0.8)+
+  theme_classic()+xlab('ISI (s)')+ylab('Count')
+#ggsave("/Users/chenghui/Documents/synoptic/cell data/plot_kHAP_fit_ISI.png",plot_kHAP_fit_ISI)
+# Ire_fit_ISI_300=Ire_fit_ISI[which(Ire_fit_ISI$Ire==300),]
+# ggplot(Ire_fit_ISI_300,aes(x=ISI,color=Ire))+
+# geom_density(binwidth = 0.001)+xlim(-0.5,0.5)+ylim(0,1000)+
+# theme_classic()+xlab('ISI (s)')+ylab('Count')
+```
+
+# Compare with cell data
+## Read in data
+```{r}
+home="/Users/chenghui/Documents/synoptic/cell data/"
+Cell_ISI=read.csv(paste0(home,"Cell_ISI.csv"))
+Cell_Hazard=read.csv(paste0(home,"Cell_Hazard.csv"))
+Cell_ID=unique(Cell_ISI$Cell_ID)
+ID=1
+```
+
+## lambda_HAP estimation
+```{r}
+ISI_combine=rbind(Cell_ISI[which(Cell_ISI$Cell_ID==Cell_ID[ID]),2:3],lambda_HAP_fit_ISI)
+ggplot(ISI_combine,aes(x=ISI,color=Cell_ID))+
+  geom_histogram(aes(fill=Cell_ID),alpha=0.5,binwidth = 0.005)+xlim(-0.1,1)+
+  theme_classic()+xlab('ISI (s)')+ylab('Count')
+ggplot(ISI_combine,aes(x=ISI,color=Cell_ID))+geom_density()+
+  xlim(-0.1,1)+theme_classic()+xlab('ISI (s)')+ylab('Count')
+```
+
+## kHAP estimation
+```{r}
+ISI_combine=rbind(Cell_ISI[which(Cell_ISI$Cell_ID==Cell_ID[ID]),2:3],kHAP_fit_ISI)
+ggplot(ISI_combine,aes(x=ISI,color=Cell_ID))+
+  geom_histogram(binwidth = 0.005)+xlim(-0.1,1)+
+  theme_classic()+xlab('ISI (s)')+ylab('Count')
+ggplot(ISI_combine,aes(x=ISI,color=Cell_ID))+geom_density()+
+  xlim(-0.1,1)+theme_classic()+xlab('ISI (s)')+ylab('Count')
+```

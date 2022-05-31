@@ -1,0 +1,187 @@
+---
+title: "Analyisis of in vivo Spike Timing of Oxytocin Neurons"
+author: "Alana"
+date: "2022/5/18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,cache = TRUE,warning = FALSE, message = FALSE)
+```
+
+# Read in Data
+The spiking data were provided by Dr. Duncan Macgregor as txt format and read into R.
+```{r}
+home="/Users/chenghui/Documents/synoptic/cell data/"
+data= list()
+cellnum=0
+Cell_ID=c()
+for (i in list.files(home)){
+  if (length(grep('txt', i))==0){next}
+   cellnum=cellnum+1
+  # get file prefix
+  prefix = strsplit(i, split='\\.')[[1]][1]
+  Cell_ID=c(Cell_ID,prefix)
+  dt = read.table(file.path(home, i),header = T)
+  data[[cellnum]]=dt
+}
+```
+
+# Spike Rate
+Calculate the frequency of firing spikes.
+```{r}
+Frequency=c()
+for (i in 1:cellnum) {
+  celldt=data[[i]]
+  Frequency=c(Frequency,length(celldt[,1])/celldt[length(celldt[,1]),1])
+}
+Frequency_dt=data.frame(Cell_ID,Frequency)
+colnames(Frequency_dt)[2]='Frequency (spike/s)'
+print(Frequency_dt)
+library(knitr)
+kable(Frequency_dt)
+```
+# Spike Histogram
+Plot the distribution for spikes across time.
+```{r}
+library(ggplot2)
+library(ggpubr)
+plotspike=list()
+for (i in 1:cellnum){
+  celldt=data[[i]]
+  colnames(celldt)='spike_time'
+  #plotspike[[i]]=hist(celldt[,1],col="skyblue",breaks=seq(0,max(celldt[,1]+10,10)),main=Cell_ID[i])
+  plotspike[[i]]=ggplot(celldt,aes(x=spike_time))+
+    geom_histogram(binwidth = 10,fill='grey')+
+    theme_classic()+xlab('Spike Time (s)')+
+    labs(title = Cell_ID[i])
+}
+
+ggsave(paste0(home,"spike.png"),plot=ggarrange(plotlist = plotspike))
+```
+
+# Inter-Spike Interval (ISI) Analysis
+Calculate ISIs based on spike timing data.
+```{r}
+ISI=list()
+plot=list() # save histogram plottings
+plothist=list()
+for(i in 1:cellnum){
+  celldt=data[[i]]
+  isi=c()
+  for(j in 1:(length(celldt[,1])-1)){
+    isi=c(isi,celldt[j+1,1]-celldt[j,1])
+  }
+  plothist[[i]]=hist(isi,breaks=seq(0,max(isi)+0.005,0.005),plot = F)
+  isi=data.frame(isi)
+  plot[[i]]=ggplot(isi,aes(x=isi))+
+    geom_histogram(aes(x=isi),binwidth=0.005,color='grey',fill='grey')+
+    theme_classic()+labs(title = Cell_ID[[i]])+xlab('ISI (s)')
+  ISI[[i]]=isi
+}
+
+ggsave(paste0(home,"ISI.png"),plot=ggarrange(plotlist = plot))
+
+# Save ISI data as data frame for consecutive parameter fitting
+ISIdt=data.frame()
+for (i in 1:cellnum){
+  dt=cbind(rep(Cell_ID[i],length(ISI[[i]])),ISI[[i]])
+  ISIdt=rbind(ISIdt,dt)
+}
+colnames(ISIdt)=c('Cell_ID','ISI')
+write.csv(ISIdt,paste0(home,"Cell_ISI.csv"))
+```
+#ISI count normalization
+Normalised ISI count to percentage, for a better comparison among neurons.
+```{r}
+plotnormhist=list()
+for (i in 1:cellnum) {
+  ISIhist=plothist[[i]]
+  ISIhist$counts=ISIhist$counts/sum(ISIhist$counts)
+  #plot(ISIhist)
+  #axis(side=1,c(0,3,0.5))
+  #axis(side=2,c(0,800,200))
+  ISInorm=data.frame(ISIhist$breaks[1:length(ISIhist$breaks)-1]+
+                       (ISIhist$breaks[2]-ISIhist$breaks[1])/2,ISIhist$counts)
+  colnames(ISInorm)=c('ISI','norm_count')
+  plotnormhist[[i]]=ggplot(ISInorm,aes(x=ISI,y=norm_count))+
+    geom_bar(stat='identity',width = 0.005,fill='grey')+
+    theme_classic()+scale_y_continuous(expand = c(0,0),limits = c(0,0.05))+
+    xlab('ISI (s)')+ylab('Count (%)')+xlim(0,0.5)+labs(title=Cell_ID[[i]])
+}
+ggsave(paste0(home,"NormISI.png"),plot=ggarrange(plotlist = plotnormhist))
+
+```
+
+# Fit Poison
+Fit the ISI ditribution to Poison distribution
+```{r}
+poi=list()
+for(i in 1:cellnum){
+  ISIhist=plothist[[i]]
+  poi[[i]]=glm(ISIhist$counts~ISIhist$breaks[1:length(ISIhist$counts)],family = poisson())
+  print(Cell_ID[i])
+  print(summary(poi[[i]]))
+}
+```
+# The hazard function
+The hazard replaces the absolute probabilities of the histogram with conditional probabilities. It plots the chance of firing a spike (neuron excitability) against the time since the last spike.  
+
+## Parameters used for calculation
+*spikecount* – the number of spike times    
+*hist* – a vector containing the histogram in 5ms bins    
+*haz* – a vector to store the hazard    
+*bincount* – the number of bins in the histogram, typically 100       
+
+## Hazard function 
+hazard in bin [t, t + 5]) = (number of ISIs in bin [t, t + 5])/(number of ISIs of length > t)    
+```{r}
+Hazarddt=data.frame()
+plothazard=list()
+for (i in 1:cellnum){
+  celldt=data[[i]]
+  spikecount=length(celldt[,1])
+  hist=plothist[[i]]$counts
+  haz=c()
+  bincount=length(plothist[[i]]$counts)
+  hazcount=0
+  for(j in 1:bincount){
+    haz[j]=hist[j]/(spikecount-hazcount)
+    hazcount=hazcount+hist[j]
+  }
+  #plot(c(1:bincount)*0.005,haz)
+  time=c(1:bincount)*0.005
+  hazarddt=data.frame(time,haz)
+  plothazard[[i]]=ggplot(hazarddt,aes(x=time,y=haz))+
+    geom_point(color='#1F77B4FF',size=2,alpha=0.6)+
+    theme_classic()+labs(title = Cell_ID[i])+xlab('Time (s)')+ylab('Hazard')+
+    xlim(0,0.5)+ylim(0,0.2)
+  
+  # Save Hazard data for parameter fittting
+  dt=cbind(rep(Cell_ID[i],nrow(hazarddt)),hazarddt)
+  Hazarddt=rbind(Hazarddt,dt)
+}
+ggsave(paste0(home,"Hazard.png"),plot=ggarrange(plotlist = plothazard))
+
+colnames(Hazarddt)[1]='Cell_ID'
+write.csv(Hazarddt,paste0(home,"Cell_Hazard.csv"))
+```
+
+# Spike train analysis
+```{r}
+STA=list()
+for (i in 1:cellnum){
+  sta=c()
+  celldt=data[[i]]
+  for (j in 2:nrow(celldt)) {
+    if(j<=20){
+      sta=c(sta,mean(celldt[1:(j-1),])/celldt[j,])
+    }else{
+      sta=c(sta,mean(celldt[(j-20):(j-1),])/celldt[j,])
+    }
+  }
+  STA[[i]]=sta
+}
+```
+
+
