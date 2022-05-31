@@ -1,6 +1,6 @@
 ---
 title: "Model fitting Cell n210211"
-author: "Alana"
+author: "814"
 date: "2022/5/26"
 output: pdf_document
 ---
@@ -126,7 +126,7 @@ HAP_fit_ISI$ISI=as.numeric(as.character(HAP_fit_ISI$ISI))
 # Compare with cell data
 ## Read in data
 ```{r}
-home="/Users/chenghui/Documents/synoptic/cell data/"
+home="~/Documents/synoptic/cell data/"
 Cell_ISI=read.csv(paste0(home,"Cell_ISI.csv"))
 Cell_Hazard=read.csv(paste0(home,"Cell_Hazard.csv"))
 Cell_ID=unique(Cell_ISI$Cell_ID)
