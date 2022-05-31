@@ -1,6 +1,6 @@
 ---
 title: "Individual Parameter Fitting"
-author: "Alana"
+author: "814"
 date: "2022/5/23"
 output: pdf_document
 ---
@@ -136,7 +136,7 @@ ggplot(Ire_fit_ISI,aes(x=ISI,color=Ire))+
   geom_histogram(binwidth = 0.005,aes(fill=Ire),alpha=0.5)+
   xlim(0,0.5)+xlab('ISI (s)')+ylab('Count')+
   theme_classic()
-ggsave("/Users/chenghui/Documents/synoptic/cell data/Ire_fit_ISI.png",plot_Ire_fit_ISI)
+ggsave("~/Documents/synoptic/cell data/Ire_fit_ISI.png",plot_Ire_fit_ISI)
 ```
 
 ## Fit lambda_HAP
@@ -248,7 +248,7 @@ plot_lambda_HAP_fit_ISI=ggplot(lambda_HAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
 ggplot(lambda_HAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
   geom_density()+xlim(0,0.5)+theme_classic()+
   xlab('ISI (s)')+ylab('Count')
-ggsave("/Users/chenghui/Documents/synoptic/cell data/plot_lambda_HAP_fit_ISI.png",
+ggsave("~/Documents/synoptic/cell data/plot_lambda_HAP_fit_ISI.png",
        plot_lambda_HAP_fit_ISI)
 # Ire_fit_ISI_300=Ire_fit_ISI[which(Ire_fit_ISI$Ire==300),]
 # ggplot(Ire_fit_ISI_300,aes(x=ISI,color=Ire))+
@@ -369,7 +369,7 @@ plot_kHAP_fit_ISI=ggplot(kHAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
 plot_kHAP_fit_ISI=ggplot(kHAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
   geom_density(binwidth = 0.005)+xlim(0,0.8)+
   theme_classic()+xlab('ISI (s)')+ylab('Count')
-#ggsave("/Users/chenghui/Documents/synoptic/cell data/plot_kHAP_fit_ISI.png",plot_kHAP_fit_ISI)
+#ggsave("~/Documents/synoptic/cell data/plot_kHAP_fit_ISI.png",plot_kHAP_fit_ISI)
 # Ire_fit_ISI_300=Ire_fit_ISI[which(Ire_fit_ISI$Ire==300),]
 # ggplot(Ire_fit_ISI_300,aes(x=ISI,color=Ire))+
 # geom_density(binwidth = 0.001)+xlim(-0.5,0.5)+ylim(0,1000)+
@@ -379,7 +379,7 @@ plot_kHAP_fit_ISI=ggplot(kHAP_fit_ISI,aes(x=ISI,color=Cell_ID))+
 # Compare with cell data
 ## Read in data
 ```{r}
-home="/Users/chenghui/Documents/synoptic/cell data/"
+home="~/Documents/synoptic/cell data/"
 Cell_ISI=read.csv(paste0(home,"Cell_ISI.csv"))
 Cell_Hazard=read.csv(paste0(home,"Cell_Hazard.csv"))
 Cell_ID=unique(Cell_ISI$Cell_ID)
